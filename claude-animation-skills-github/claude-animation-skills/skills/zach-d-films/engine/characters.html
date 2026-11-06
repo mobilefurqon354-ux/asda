@@ -1,0 +1,43 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>characters</title>
+<style>html,body{margin:0;background:#000;overflow:hidden}</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { makeHuman } from './src/human.js';
+import { loadCharacters } from './src/glbchar.js';
+const q = new URLSearchParams(location.search);
+if (q.get('glb') !== '0') { await loadCharacters(q.get('model') || './models/characters.glb'); await loadCharacters('./models/characters_walk.glb', undefined, { set: 'walk', axis: 'z', height: 1.8 }); }
+const W = +(q.get('w') || 1800), H = +(q.get('h') || 900);
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+r.setSize(W, H); r.toneMapping = THREE.ACESFilmicToneMapping; r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x6fa8e6);
+scene.environment = new THREE.PMREMGenerator(r).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.6;
+scene.add(new THREE.HemisphereLight(0xcfe4ff, 0x7f93ad, 0.75));
+const key = new THREE.DirectionalLight(0xfff3e6, 2.3); key.position.set(-3, 6, 4); key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4 }); key.shadow.normalBias = 0.02;
+scene.add(key);
+const rim = new THREE.DirectionalLight(0xdbe9ff, 1.2); rim.position.set(4, 3, -5); scene.add(rim);
+const g = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ color: 0x1a3a66, opacity: 0.32 }));
+g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
+const STAND = { lSh: [0.05, 0, 0.16], rSh: [0.05, 0, -0.16], lEl: [-0.25, 0, 0], rEl: [-0.25, 0, 0], lHip: [0, 0, 0.07], rHip: [0, 0, -0.07], lAn: [0, 0, -0.07], rAn: [0, 0, 0.07] };
+const outfits = (q.get('o') || 'vest,chainmail,plate,knight,archer').split(',');
+const rotY = +(q.get('ry') || 0.35);
+const extra = JSON.parse(q.get('opts') || '{}'); if (q.get('p')) extra.pose = q.get('p');
+outfits.forEach((o, i) => {
+  const h = makeHuman(o, extra); h.setPose(q.get('pose') ? { ...STAND, ...JSON.parse(q.get('pose')) } : STAND); if (q.get('mouth')) h.setMouth(+q.get('mouth'));
+  if (q.get('dbg') && h.mesh) { const g = h.mesh.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, c = new Float32Array(si.count * 3);
+    for (let v = 0; v < si.count; v++) { let b = si.getX(v), w = sw.getX(v); const PAL=[0x888888,0xaaaaaa,0x00ff00,0xffff00,0x00ffff,0xff0000,0xff8800,0xff00ff,0x0000ff,0x8800ff,0x004400,0x880000,0x884400,0x880088,0x000088,0x440088,0x002200]; const col = new THREE.Color(PAL[b]).lerp(new THREE.Color(0xffffff), w > 0.9 ? 0 : 0.5); c.set([col.r, col.g, col.b], v * 3); }
+    g.setAttribute('color', new THREE.BufferAttribute(c, 3)); h.mesh.material = new THREE.MeshLambertMaterial({ vertexColors: true }); }
+  if (q.get('bones')) h.root.traverse(o => { if (o.isGroup && o !== h.root) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.018), new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false })); m.renderOrder = 99; o.add(m); } });
+  h.root.position.x = (i - (outfits.length - 1) / 2) * 0.85; h.root.rotation.y = rotY; scene.add(h.root);
+});
+const cam = new THREE.PerspectiveCamera(+(q.get('fov') || 30), W / H, 0.1, 100);
+const cz = +(q.get('cz') || 6.5), cy = +(q.get('cy') || 1.0), ly = +(q.get('ly') || 0.95);
+cam.position.set(0, cy, cz); cam.lookAt(0, ly, 0);
+window.t0=performance.now(); r.render(scene, cam); window.done = true;
+</script></body></html>
